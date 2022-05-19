@@ -13,7 +13,6 @@ import (
 	"github.com/codeready-toolchain/registration-service/pkg/auth"
 	"github.com/codeready-toolchain/registration-service/pkg/configuration"
 	"github.com/codeready-toolchain/registration-service/pkg/log"
-	"github.com/codeready-toolchain/registration-service/pkg/proxy"
 	"github.com/codeready-toolchain/registration-service/pkg/server"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
@@ -69,7 +68,7 @@ func main() {
 	}
 	crtConfig.Print()
 
-	app, err := server.NewInClusterApplication()
+	app, err := server.NewInClusterApplication(cfg)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -80,11 +79,11 @@ func main() {
 	}
 
 	// Start the proxy server
-	p, err := proxy.NewProxy(app)
-	if err != nil {
-		panic(errs.Wrap(err, "failed to create proxy"))
-	}
-	proxySrv := p.StartProxy()
+	//p, err := proxy.NewProxy(app)
+	//if err != nil {
+	//	panic(errs.Wrap(err, "failed to create proxy"))
+	//}
+	//proxySrv := p.StartProxy()
 
 	srv := server.New(app)
 
@@ -115,7 +114,7 @@ func main() {
 		}
 	}()
 
-	gracefulShutdown(configuration.GracefulTimeout, srv.HTTPServer(), proxySrv)
+	gracefulShutdown(configuration.GracefulTimeout, srv.HTTPServer())
 }
 
 func gracefulShutdown(timeout time.Duration, hs ...*http.Server) {

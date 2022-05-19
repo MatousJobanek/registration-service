@@ -1,13 +1,9 @@
 package controller
 
 import (
-	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/codeready-toolchain/registration-service/pkg/configuration"
-	"github.com/codeready-toolchain/registration-service/pkg/log"
-	"github.com/codeready-toolchain/registration-service/pkg/proxy"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 
 	"github.com/gin-gonic/gin"
@@ -78,15 +74,15 @@ func (c *healthCheckerImpl) Alive(ctx *gin.Context) bool {
 }
 
 func (c *healthCheckerImpl) APIProxyAlive(ctx *gin.Context) bool {
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%s/proxyhealth", proxy.ProxyPort))
-	if err != nil {
-		log.Error(ctx, err, "API Proxy health check failed")
-		return false
-	}
-	defer resp.Body.Close()
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Error(ctx, err, "failed to read API Proxy health check body")
-	}
-	return resp.StatusCode == http.StatusOK
+	//resp, err := http.Get(fmt.Sprintf("http://localhost:%s/proxyhealth", proxy.ProxyPort))
+	//if err != nil {
+	//	log.Error(ctx, err, "API Proxy health check failed")
+	//	return false
+	//}
+	//defer resp.Body.Close()
+	//_, err = ioutil.ReadAll(resp.Body)
+	//if err != nil {
+	//	log.Error(ctx, err, "failed to read API Proxy health check body")
+	//}
+	return true
 }

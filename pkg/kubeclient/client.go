@@ -1,7 +1,11 @@
 package kubeclient
 
 import (
+	"context"
+	"fmt"
+
 	crtapi "github.com/codeready-toolchain/api/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -36,13 +40,29 @@ func NewCRTRESTClient(cfg *rest.Config, namespace string) (CRTClient, error) {
 	config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: serializer.NewCodecFactory(scheme)}
 	config.UserAgent = rest.DefaultKubernetesUserAgent()
 
-	client, err := rest.RESTClientFor(&config)
+	cl, err := rest.RESTClientFor(&config)
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Println(*cfg)
+
+	cli, err := client.New(cfg, client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		return nil, err
+	}
+	signups := &crtapi.UserSignupList{}
+	err = cli.List(context.TODO(), signups, client.InNamespace(namespace))
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(signups)
+
 	crtRESTClient := &CRTRESTClient{
-		RestClient: client,
+		RestClient: cl,
 		Config:     config,
 		NS:         namespace,
 		Scheme:     scheme,

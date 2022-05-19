@@ -21,7 +21,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/states"
 	"github.com/codeready-toolchain/toolchain-common/pkg/usersignup"
-
 	"github.com/gin-gonic/gin"
 	errs "github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
@@ -312,23 +311,23 @@ func (s *ServiceImpl) GetSignup(userID, username string) (*signup.Signup, error)
 		Message:              murCondition.Message,
 		VerificationRequired: states.VerificationRequired(userSignup),
 	}
-	if mur.Status.UserAccounts != nil && len(mur.Status.UserAccounts) > 0 {
-		// Retrieve Console and Che dashboard URLs from the status of the corresponding member cluster
-		status, err := s.CRTClient().V1Alpha1().ToolchainStatuses().Get()
-		if err != nil {
-			return nil, errs.Wrapf(err, "error when retrieving ToolchainStatus to set Che Dashboard for completed UserSignup %s", userSignup.GetName())
-		}
-		signupResponse.ProxyURL = status.Status.HostRoutes.ProxyURL
-		for _, member := range status.Status.Members {
-			if member.ClusterName == mur.Status.UserAccounts[0].Cluster.Name {
-				signupResponse.ConsoleURL = member.MemberStatus.Routes.ConsoleURL
-				signupResponse.CheDashboardURL = member.MemberStatus.Routes.CheDashboardURL
-				signupResponse.APIEndpoint = member.APIEndpoint
-				signupResponse.ClusterName = member.ClusterName
-				break
-			}
-		}
-	}
+	//if mur.Status.UserAccounts != nil && len(mur.Status.UserAccounts) > 0 {
+	//	// Retrieve Console and Che dashboard URLs from the status of the corresponding member cluster
+	//	status, err := s.CRTClient().V1Alpha1().ToolchainStatuses().Get()
+	//	if err != nil {
+	//		return nil, errs.Wrapf(err, "error when retrieving ToolchainStatus to set Che Dashboard for completed UserSignup %s", userSignup.GetName())
+	//	}
+	//	signupResponse.ProxyURL = status.Status.HostRoutes.ProxyURL
+	//	for _, member := range status.Status.Members {
+	//		if member.ClusterName == mur.Status.UserAccounts[0].Cluster.Name {
+	//			signupResponse.ConsoleURL = member.MemberStatus.Routes.ConsoleURL
+	//			signupResponse.CheDashboardURL = member.MemberStatus.Routes.CheDashboardURL
+	//			signupResponse.APIEndpoint = member.APIEndpoint
+	//			signupResponse.ClusterName = member.ClusterName
+	//			break
+	//		}
+	//	}
+	//}
 
 	return signupResponse, nil
 }
