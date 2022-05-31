@@ -296,21 +296,24 @@ func (s *ServiceImpl) GetSignup(userID, username string) (*signup.Signup, error)
 
 	// If UserSignup status is complete as active
 	// Retrieve MasterUserRecord resource from the host cluster and use its status
-	mur, err := s.CRTClient().V1Alpha1().MasterUserRecords().Get(userSignup.Status.CompliantUsername)
+	//mur, err := s.CRTClient().V1Alpha1().MasterUserRecords().Get(userSignup.Status.CompliantUsername)
+	//if err != nil {
+	//	return nil, errs.Wrap(err, fmt.Sprintf("error when retrieving MasterUserRecord for completed UserSignup %s", userSignup.GetName()))
+	//}
+	//murCondition, _ := condition.FindConditionByType(mur.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	ready, err := strconv.ParseBool(string(completeCondition.Status))
 	if err != nil {
-		return nil, errs.Wrap(err, fmt.Sprintf("error when retrieving MasterUserRecord for completed UserSignup %s", userSignup.GetName()))
-	}
-	murCondition, _ := condition.FindConditionByType(mur.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	ready, err := strconv.ParseBool(string(murCondition.Status))
-	if err != nil {
-		return nil, errs.Wrapf(err, "unable to parse readiness status as bool: %s", murCondition.Status)
+		return nil, errs.Wrapf(err, "unable to parse readiness status as bool: %s", completeCondition.Status)
 	}
 	signupResponse.Status = signup.Status{
 		Ready:                ready,
-		Reason:               murCondition.Reason,
-		Message:              murCondition.Message,
+		Reason:               completeCondition.Reason,
+		Message:              completeCondition.Message,
 		VerificationRequired: states.VerificationRequired(userSignup),
 	}
+	signupResponse.APIEndpoint = completeCondition.Message
+	signupResponse.ClusterName = completeCondition.Message
+	signupResponse.ConsoleURL = completeCondition.Message
 	//if mur.Status.UserAccounts != nil && len(mur.Status.UserAccounts) > 0 {
 	//	// Retrieve Console and Che dashboard URLs from the status of the corresponding member cluster
 	//	status, err := s.CRTClient().V1Alpha1().ToolchainStatuses().Get()

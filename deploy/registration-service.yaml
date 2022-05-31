@@ -1,11 +1,11 @@
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    provider: codeready-toolchain
-  name: registration-service
-  namespace: toolchain-host-operator
+#apiVersion: v1
+#kind: ServiceAccount
+#metadata:
+#  labels:
+#    provider: codeready-toolchain
+#  name: registration-service
+#  namespace: user-registration-service
 ---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
@@ -13,7 +13,7 @@ metadata:
   labels:
     provider: codeready-toolchain
   name: registration-service
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
 rules:
   - apiGroups:
       - toolchain.dev.openshift.com
@@ -55,10 +55,11 @@ metadata:
   labels:
     provider: codeready-toolchain
   name: registration-service
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
 subjects:
   - kind: ServiceAccount
-    name: registration-service
+#    name: registration-service
+    name: default
 roleRef:
   kind: Role
   name: registration-service
@@ -70,7 +71,7 @@ metadata:
   labels:
     provider: codeready-toolchain
   name: registration-service
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
 spec:
   replicas: 1
   selector:
@@ -82,7 +83,8 @@ spec:
         name: registration-service
         run: registration-service
     spec:
-      serviceAccountName: registration-service
+#      serviceAccountName: registration-service
+      serviceAccountName: default
       containers:
         - name: registration-service
           image: quay.io/matousjobanek/registration-service:latest
@@ -114,28 +116,28 @@ spec:
             timeoutSeconds: 1
           env:
             - name: WATCH_NAMESPACE
-              value: toolchain-host-operator
-            - name: KUBECONFIG
-              value: /kcp/kubeconfig
+              value: user-registration-service
+#            - name: KUBECONFIG
+#              value: /kcp/kubeconfig
           resources:
             requests:
               cpu: "50m"
               memory: "100M"
-          volumeMounts:
-          - name: kcp-config
-            mountPath: /kcp/
-            readOnly: true
-      volumes:
-      - name: kcp-config
-        secret:
-          secretName: kcp-syncer-config
-          optional: false
+#          volumeMounts:
+#          - name: reg-serv-config
+#            mountPath: /kcp/
+#            readOnly: true
+#      volumes:
+#      - name: reg-serv-config
+#        secret:
+#          secretName: reg-serv-config
+#          optional: false
 ---
 kind: Service
 apiVersion: v1
 metadata:
   name: rs
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
   labels:
     provider: codeready-toolchain
     run: registration-service
@@ -157,7 +159,7 @@ metadata:
     provider: codeready-toolchain
     run: registration-service
   name: rs
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
 spec:
   host: ''
   port:
@@ -176,7 +178,7 @@ spec:
 #    provider: codeready-toolchain
 #    run: registration-service
 #  name: rs
-#  namespace: toolchain-host-operator
+#  namespace: user-registration-service
 #spec:
 #  ingressClassName: nginx
 #  rules:
@@ -1051,7 +1053,7 @@ apiVersion: toolchain.dev.openshift.com/v1alpha1
 kind: ToolchainConfig
 metadata:
   name: config
-  namespace: toolchain-host-operator
+  namespace: user-registration-service
 spec:
   host:
     tiers:

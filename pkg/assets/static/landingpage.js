@@ -146,7 +146,7 @@ function updateSignupState() {
       if (consoleURL === undefined) {
         consoleURL = 'n/a'
       } else {
-        consoleURL = data.consoleURL + 'topology/ns/' + data.compliantUsername + '-dev';
+        consoleURL = data.consoleURL;
       }
       cheDashboardURL = data.cheDashboardURL;
       proxyURL = 'oc login --token='+idToken+' --server=' +data.proxyURL;
