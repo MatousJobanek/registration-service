@@ -115,7 +115,7 @@ function loadAuthLibrary(url, cbSuccess, cbError) {
   script.onreadystatechange = loadFunction;
   document.getElementsByTagName('head')[0].appendChild(script);
 }
-      
+
 // gets the signup state once.
 function getSignupState(cbSuccess, cbError) {
   getJSON('GET', signupURL, idToken, function(err, data) {
@@ -157,8 +157,42 @@ function updateSignupState() {
       console.log('showing dashboard..');
       hideAll();
       show('dashboard');
-      document.getElementById('stateConsole').href = consoleURL;
-      document.getElementById('cheDashboard').href = cheDashboardURL;
+      document.getElementById('kubeconfig').value = 'apiVersion: v1\n' +
+          'clusters:\n' +
+          '- cluster:\n' +
+          '    server: '+consoleURL+'\n' +
+          '  name: kcp-stable\n' +
+          '- cluster:\n' +
+          '    server: '+consoleURL+'\n' +
+          '  name: kcp-unstable\n' +
+          'contexts:\n' +
+          '- context:\n' +
+          '    cluster: kcp-stable\n' +
+          '    namespace: default\n' +
+          '    user: oidc\n' +
+          '  name: kcp-stable\n' +
+          '- context:\n' +
+          '    cluster: kcp-unstable\n' +
+          '    namespace: default\n' +
+          '    user: oidc\n' +
+          '  name: kcp-unstable\n' +
+          'current-context: kcp-stable\n' +
+          'kind: Config\n' +
+          'preferences: {}\n' +
+          'users:\n' +
+          '- name: oidc\n' +
+          '  user:\n' +
+          '    exec:\n' +
+          '      apiVersion: client.authentication.k8s.io/v1beta1\n' +
+          '      args:\n' +
+          '      - oidc-login\n' +
+          '      - get-token\n' +
+          '      - --oidc-issuer-url=https://sso.redhat.com/auth/realms/redhat-external\n' +
+          '      - --oidc-client-id=rhoas-cli-prod\n' +
+          '      command: kubectl\n' +
+          '      env: null\n' +
+          '      interactiveMode: IfAvailable\n' +
+          '      provideClusterInfo: false';
     } else if (data.status.ready === false && data.status.reason === 'Provisioning') {
       console.log('account is provisioning..');
       // account is provisioning; start polling.
@@ -297,7 +331,7 @@ function resendPhoneVerification() {
     getJSON('PUT', phoneVerificationURL, idToken, function(err, data) {
       if (err != null) {
         showError('Error while sending verification code. Please try again later.');
-      } 
+      }
     }, {
       country_code: countryCode,
       phone_number: phoneNumber
@@ -318,10 +352,10 @@ function restartPhoneVerification() {
 function termsAgreed(cb) {
   if (cb.checked) {
     document.getElementById('loginbutton').classList.remove('getstartedbutton-disabled');
-    document.getElementById('loginbutton').classList.add('getstartedbutton-enabled');  
+    document.getElementById('loginbutton').classList.add('getstartedbutton-enabled');
   } else {
     document.getElementById('loginbutton').classList.add('getstartedbutton-disabled');
-    document.getElementById('loginbutton').classList.remove('getstartedbutton-enabled');  
+    document.getElementById('loginbutton').classList.remove('getstartedbutton-enabled');
   }
 }
 

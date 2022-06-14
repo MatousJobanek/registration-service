@@ -1064,13 +1064,19 @@ spec:
     deactivation:
       deactivationDomainsExcluded: '@redhat.com'
     registrationService:
-      environment: 'dev'
-      verification:
-        secret:
-          ref: 'host-operator-secret'
-          twilioAccountSID: 'twilio.account.sid'
-          twilioAuthToken: 'twilio.auth.token'
-          twilioFromNumber: 'twilio.from_number'
+      auth:
+        authClientConfigRaw: '{
+                  "realm": "redhat-external",
+                  "auth-server-url": "https://sso.redhat.com/auth",
+                  "ssl-required": "ALL",
+                  "resource": "appstudio-stage-public",
+                  "clientId": "appstudio-stage-public",
+                  "public-client": true
+                }'
+        authClientLibraryURL: https://sso.redhat.com/auth/js/keycloak.js
+        authClientPublicKeysURL: https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/certs
+      environment: prod
+      registrationServiceURL: https://rs-kcp607eac86e036b29718f88baa66f49d1e0a0deed4bdcfeaed47a8dca0.apps.appstudio-stage.x99m.p1.openshiftapps.com/
   members:
     default:
       autoscaler:
