@@ -11,11 +11,13 @@ import (
 	clusterservice "github.com/codeready-toolchain/registration-service/pkg/proxy/service"
 	signupservice "github.com/codeready-toolchain/registration-service/pkg/signup/service"
 	verificationservice "github.com/codeready-toolchain/registration-service/pkg/verification/service"
+	"k8s.io/client-go/rest"
 )
 
 type serviceContextImpl struct {
 	kubeClient kubeclient.CRTClient
 	services   service.Services
+	config     *rest.Config
 }
 
 type ServiceContextOption = func(ctx *serviceContextImpl)
@@ -26,10 +28,18 @@ func CRTClientOption(kubeClient kubeclient.CRTClient) ServiceContextOption {
 	}
 }
 
+func RestConfig(config *rest.Config) ServiceContextOption {
+	return func(ctx *serviceContextImpl) {
+		ctx.config = config
+	}
+}
+
 func (s *serviceContextImpl) CRTClient() kubeclient.CRTClient {
 	return s.kubeClient
 }
-
+func (s *serviceContextImpl) Config() *rest.Config {
+	return s.config
+}
 func (s *serviceContextImpl) Services() service.Services {
 	return s.services
 }

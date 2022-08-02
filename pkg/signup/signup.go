@@ -32,9 +32,12 @@ type Signup struct {
 // Status represents UserSignup resource status
 type Status struct {
 	// If true then the corresponding user's account is ready to be used
-	Ready bool `json:"ready"`
+	Ready            bool `json:"ready"`
+	AppStudioReady   bool `json:"appstudioReady"`
+	AppStudioCreated bool `json:"appstudioCreated"`
 	// Brief reason for the status last transition.
 	Reason string `json:"reason"`
+	URL    string `json:"url"`
 	// Human readable message indicating details about last transition.
 	Message string `json:"message,omitempty"`
 	// VerificationRequired is used to determine if a user requires phone verification.

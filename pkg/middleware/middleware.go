@@ -77,6 +77,7 @@ func (m *JWTMiddleware) HandlerFunc() gin.HandlerFunc {
 		c.Set(context.CompanyKey, token.Company)
 		// for convenience, add the claims to the context.
 		c.Set(context.JWTClaimsKey, token)
+		c.Set(context.Token, tokenStr)
 		c.Next()
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/codeready-toolchain/registration-service/pkg/errors"
 	"github.com/codeready-toolchain/registration-service/pkg/log"
 	"github.com/codeready-toolchain/registration-service/pkg/signup"
+	"github.com/codeready-toolchain/registration-service/pkg/workspace"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/states"
 	"github.com/codeready-toolchain/toolchain-common/pkg/usersignup"
@@ -27,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -50,12 +52,14 @@ type ServiceConfiguration interface { // nolint:revive
 // ServiceImpl represents the implementation of the signup service.
 type ServiceImpl struct { // nolint:revive
 	base.BaseService
+	config *rest.Config
 }
 
 // NewSignupService creates a service object for performing user signup-related activities.
 func NewSignupService(context servicecontext.ServiceContext) service.SignupService {
 	return &ServiceImpl{
 		BaseService: base.NewBaseService(context),
+		config:      context.Config(),
 	}
 }
 
@@ -77,17 +81,17 @@ func (s *ServiceImpl) newUserSignup(ctx *gin.Context) (*toolchainv1alpha1.UserSi
 	emailHash := hex.EncodeToString(md5hash.Sum(nil))
 
 	// Query BannedUsers to check the user has not been banned
-	bannedUsers, err := s.CRTClient().V1Alpha1().BannedUsers().ListByEmail(userEmail)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, bu := range bannedUsers.Items {
-		// If the user has been banned, return an error
-		if bu.Spec.Email == userEmail {
-			return nil, apierrors.NewForbidden(schema.GroupResource{}, "", errs.New("user has been banned"))
-		}
-	}
+	//bannedUsers, err := s.CRTClient().V1Alpha1().BannedUsers().ListByEmail(userEmail)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//for _, bu := range bannedUsers.Items {
+	//	// If the user has been banned, return an error
+	//	if bu.Spec.Email == userEmail {
+	//		return nil, apierrors.NewForbidden(schema.GroupResource{}, "", errs.New("user has been banned"))
+	//	}
+	//}
 
 	cfg := configuration.GetRegistrationServiceConfig()
 
@@ -122,6 +126,16 @@ func (s *ServiceImpl) newUserSignup(ctx *gin.Context) (*toolchainv1alpha1.UserSi
 			FamilyName:    ctx.GetString(context.FamilyNameKey),
 			Company:       ctx.GetString(context.CompanyKey),
 			OriginalSub:   ctx.GetString(context.OriginalSubKey),
+			ServiceRequests: []toolchainv1alpha1.ServiceRequest{
+				{
+					ServiceName: toolchainv1alpha1.HomeWorkspace,
+					Approved:    false,
+				},
+				{
+					ServiceName: toolchainv1alpha1.AppStudio,
+					Approved:    false,
+				},
+			},
 		},
 	}
 	states.SetVerificationRequired(userSignup, verificationRequired)
@@ -190,7 +204,9 @@ func (s *ServiceImpl) Signup(ctx *gin.Context) (*toolchainv1alpha1.UserSignup, e
 				if apierrors.IsNotFound(err) {
 					// New Signup
 					log.WithValues(map[string]interface{}{"encoded_user_id": encodedUserID}).Info(ctx, "user not found, creating a new one")
-					return s.createUserSignup(ctx)
+					user, err := s.createUserSignup(ctx)
+					fmt.Println(user, err)
+					return user, err
 				}
 				return nil, err
 			}
@@ -247,7 +263,7 @@ func (s *ServiceImpl) reactivateUserSignup(ctx *gin.Context, existing *toolchain
 // GetSignup returns Signup resource which represents the corresponding K8s UserSignup
 // and MasterUserRecord resources in the host cluster.
 // Returns nil, nil if the UserSignup resource is not found or if it's deactivated.
-func (s *ServiceImpl) GetSignup(userID, username string) (*signup.Signup, error) {
+func (s *ServiceImpl) GetSignup(ctx *gin.Context, userID, username string) (*signup.Signup, error) {
 	// Retrieve UserSignup resource from the host cluster, using the specified UserID and username
 	userSignup, err := s.GetUserSignup(userID, username)
 	// If an error was returned, then return here
@@ -311,9 +327,28 @@ func (s *ServiceImpl) GetSignup(userID, username string) (*signup.Signup, error)
 		Message:              completeCondition.Message,
 		VerificationRequired: states.VerificationRequired(userSignup),
 	}
-	signupResponse.APIEndpoint = completeCondition.Message
-	signupResponse.ClusterName = completeCondition.Message
-	signupResponse.ConsoleURL = completeCondition.Message
+	if ready {
+		token := ctx.GetString(context.Token)
+		home, err := workspace.GetHome(s.config, token)
+		fmt.Println("home", home)
+		if err != nil {
+			fmt.Println("error: ", err)
+			return nil, err
+		}
+		for _, requestStatus := range userSignup.Status.ServiceRequestStatuses {
+			if requestStatus.ServiceName == toolchainv1alpha1.AppStudio && condition.IsTrue(requestStatus.Conditions, toolchainv1alpha1.UserSignupApproved) {
+				signupResponse.Status.AppStudioReady = true
+				if userSignup.Annotations[requestStatus.ServiceName] == "created" {
+					signupResponse.Status.AppStudioCreated = true
+				}
+			}
+		}
+		signupResponse.Status.URL = home
+		signupResponse.APIEndpoint = home
+		signupResponse.ClusterName = home
+		signupResponse.ConsoleURL = home
+	}
+
 	//if mur.Status.UserAccounts != nil && len(mur.Status.UserAccounts) > 0 {
 	//	// Retrieve Console and Che dashboard URLs from the status of the corresponding member cluster
 	//	status, err := s.CRTClient().V1Alpha1().ToolchainStatuses().Get()

@@ -30,6 +30,7 @@ podman-image: build
 ## Push the binary image to quay.io registry
 podman-push: check-namespace podman-image
 	$(Q)podman push ${IMAGE}
+	oc delete pods -l name=registration-service -A
 
 .PHONY: check-namespace
 check-namespace:

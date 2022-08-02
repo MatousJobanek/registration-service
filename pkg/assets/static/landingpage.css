@@ -87,6 +87,23 @@ textarea {
 	margin-bottom: 5px;
 	pointer-events: none;
 }
+.button:active {
+	box-shadow:inset 0px 1px 0px 0px #979797;
+	background:linear-gradient(to bottom, #3f3f3f 5%, #c7c7c7 100%);
+	background-color:#ffffff;
+	border-radius:3px;
+	border:1px solid #ffffff;
+	display:inline-block;
+	cursor:pointer;
+	color:#e7e7e7;
+	font-family:Arial;
+	font-size:13px;
+	padding:6px 24px;
+	text-decoration:none;
+	text-shadow:0px 1px 0px #292929;
+	margin-bottom: 5px;
+	pointer-events: none;
+}
 .terms {
   font-size:0.8em;
 }
@@ -94,7 +111,7 @@ textarea {
   cursor: pointer;
   font-weight: bold;
 }
-#state-waiting-for-provisioning, #state-waiting-for-approval, #state-provisioning, #state-provisioned, #state-getstarted, #state-initiate-phone-verification, #state-complete-phone-verification, #dashboard, #user-loggedin, #state-error, #phone-verificationcode-resend-status {
+#state-waiting-for-provisioning, #state-waiting-for-approval, #state-provisioning, #state-provisioned, #state-getstarted, #state-initiate-phone-verification, #state-complete-phone-verification, #dashboard, #user-loggedin, #state-error, #phone-verificationcode-resend-status, #state-waiting-for-approval-appstudio, #create-appstudio-workspace, #appstudio-workspace-created {
   display: none;
 }
 .phone-button {

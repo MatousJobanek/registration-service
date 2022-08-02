@@ -15,8 +15,11 @@ import (
 	"github.com/codeready-toolchain/registration-service/pkg/application/service/base"
 	servicecontext "github.com/codeready-toolchain/registration-service/pkg/application/service/context"
 	"github.com/codeready-toolchain/registration-service/pkg/configuration"
+	"github.com/codeready-toolchain/registration-service/pkg/context"
 	crterrors "github.com/codeready-toolchain/registration-service/pkg/errors"
 	"github.com/codeready-toolchain/registration-service/pkg/log"
+	"github.com/codeready-toolchain/registration-service/pkg/workspace"
+	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/states"
 
 	"github.com/gin-gonic/gin"
@@ -214,7 +217,7 @@ func generateVerificationCode() (string, error) {
 // if an error is returned by this function the caller should still process changes to it
 func (s *ServiceImpl) VerifyPhoneCode(ctx *gin.Context, userID, username, code string) (verificationErr error) {
 
-	cfg := configuration.GetRegistrationServiceConfig()
+	//cfg := configuration.GetRegistrationServiceConfig()
 	// If we can't even find the UserSignup, then die here
 	signup, lookupErr := s.Services().SignupService().GetUserSignup(userID, username)
 	if lookupErr != nil {
@@ -226,101 +229,29 @@ func (s *ServiceImpl) VerifyPhoneCode(ctx *gin.Context, userID, username, code s
 		return crterrors.NewInternalError(lookupErr, fmt.Sprintf("error retrieving usersignup: %s", userID))
 	}
 
-	annotationValues := map[string]string{}
-	annotationsToDelete := []string{}
-	unsetVerificationRequired := false
-
-	err := s.Services().SignupService().PhoneNumberAlreadyInUse(userID, username, signup.Labels[toolchainv1alpha1.UserSignupUserPhoneHashLabelKey])
-	if err != nil {
-		log.Error(ctx, err, "phone number to verify already in use")
-		return crterrors.NewBadRequest("phone number already in use",
-			"the phone number provided for this signup is already in use by an active account")
-	}
-
-	now := time.Now()
-
-	attemptsMade, convErr := strconv.Atoi(signup.Annotations[toolchainv1alpha1.UserVerificationAttemptsAnnotationKey])
-	if convErr != nil {
-		// We shouldn't get an error here, but if we do, we will set verification attempts to max allowed
-		// so that we at least now have a valid value, and let the workflow continue to the
-		// subsequent attempts check
-		log.Error(ctx, convErr, fmt.Sprintf("error converting annotation [%s] value [%s] to integer, on UserSignup: [%s]",
-			toolchainv1alpha1.UserVerificationAttemptsAnnotationKey,
-			signup.Annotations[toolchainv1alpha1.UserVerificationAttemptsAnnotationKey], signup.Name))
-		attemptsMade = cfg.Verification().AttemptsAllowed()
-		annotationValues[toolchainv1alpha1.UserVerificationAttemptsAnnotationKey] = strconv.Itoa(attemptsMade)
-	}
-
-	// If the user has made more attempts than is allowed per generated verification code, return an error
-	if attemptsMade >= cfg.Verification().AttemptsAllowed() {
-		verificationErr = crterrors.NewTooManyRequestsError("too many verification attempts", "")
-	}
-
-	if verificationErr == nil {
-		// Parse the verification expiry timestamp
-		exp, parseErr := time.Parse(TimestampLayout, signup.Annotations[toolchainv1alpha1.UserVerificationExpiryAnnotationKey])
-		if parseErr != nil {
-			// If the verification expiry timestamp is corrupt or missing, then return an error
-			verificationErr = crterrors.NewInternalError(parseErr, "error parsing expiry timestamp")
-		} else if now.After(exp) {
-			// If it is now past the expiry timestamp for the verification code, return a 403 Forbidden error
-			verificationErr = crterrors.NewForbiddenError("expired", "verification code expired")
+	created := false
+	for _, request := range signup.Spec.ServiceRequests {
+		if request.ServiceName == toolchainv1alpha1.AppStudio && request.Approved {
+			if condition.IsTrue(signup.Status.Conditions, toolchainv1alpha1.UserSignupComplete) {
+				url, err := workspace.CreateAppStudio(s.Config(), ctx.GetString(context.Token))
+				if err != nil {
+					return err
+				}
+				fmt.Println(url)
+				created = true
+				if signup.Annotations == nil {
+					signup.Annotations = map[string]string{}
+				}
+				signup.Annotations[request.ServiceName] = "created"
+			}
 		}
 	}
 
-	if verificationErr == nil {
-		if code != signup.Annotations[toolchainv1alpha1.UserSignupVerificationCodeAnnotationKey] {
-			// The code doesn't match
-			attemptsMade++
-			annotationValues[toolchainv1alpha1.UserVerificationAttemptsAnnotationKey] = strconv.Itoa(attemptsMade)
-			verificationErr = crterrors.NewForbiddenError("invalid code", "the provided code is invalid")
-		}
+	if !created {
+		return fmt.Errorf("you are not approved either for appstudio or CPS")
 	}
-
-	if verificationErr == nil {
-		// If the code matches then set VerificationRequired to false, reset other verification annotations
-		unsetVerificationRequired = true
-		annotationsToDelete = append(annotationsToDelete, toolchainv1alpha1.UserSignupVerificationCodeAnnotationKey)
-		annotationsToDelete = append(annotationsToDelete, toolchainv1alpha1.UserVerificationAttemptsAnnotationKey)
-		annotationsToDelete = append(annotationsToDelete, toolchainv1alpha1.UserSignupVerificationCounterAnnotationKey)
-		annotationsToDelete = append(annotationsToDelete, toolchainv1alpha1.UserSignupVerificationInitTimestampAnnotationKey)
-		annotationsToDelete = append(annotationsToDelete, toolchainv1alpha1.UserVerificationExpiryAnnotationKey)
-	} else {
-		log.Error(ctx, verificationErr, "error validating verification code")
-	}
-
-	doUpdate := func() error {
-		signup, err := s.Services().SignupService().GetUserSignup(userID, username)
-		if err != nil {
-			return err
-		}
-
-		if unsetVerificationRequired {
-			states.SetVerificationRequired(signup, false)
-		}
-
-		for k, v := range annotationValues {
-			signup.Annotations[k] = v
-		}
-
-		for _, annotationName := range annotationsToDelete {
-			delete(signup.Annotations, annotationName)
-		}
-
-		_, err = s.Services().SignupService().UpdateUserSignup(signup)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	updateErr := pollUpdateSignup(ctx, doUpdate)
-	if updateErr != nil {
-		return updateErr
-	}
-
-	return
+	_, err := s.Services().SignupService().UpdateUserSignup(signup)
+	return err
 }
 
 // VerifyActivationCode verifies the activation code:

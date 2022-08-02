@@ -40,13 +40,16 @@ var getJSON = function(method, url, token, callback, body) {
     xhr.send(JSON.stringify(body));
   else
     xhr.send();
-};
+}, home_workspace;
 
 // hides all state content.
 function hideAll() {
   console.log('hiding all..');
+  document.getElementById('appstudio-workspace-created').style.display = 'none';
+  document.getElementById('create-appstudio-workspace').style.display = 'none';
   document.getElementById('state-waiting-for-provisioning').style.display = 'none';
   document.getElementById('state-waiting-for-approval').style.display = 'none';
+  document.getElementById('state-waiting-for-approval-appstudio').style.display = 'none';
   document.getElementById('state-provisioned').style.display = 'none';
   document.getElementById('state-getstarted').style.display = 'none';
   document.getElementById('state-error').style.display = 'none';
@@ -129,6 +132,29 @@ function getSignupState(cbSuccess, cbError) {
   })
 }
 
+function getHome(cbSuccess, cbError) {
+  getJSON('GET', consoleURL, idToken, function(err, data) {
+    if (err != null) {
+      console.log('getSignup error..');
+      cbError(err, data);
+    } else {
+      console.log('getSignup successful..');
+      cbSuccess(data);
+    }
+  })
+}
+
+function create() {
+  getJSON('GET', phoneVerificationURL + '/appstudio', idToken, function(err, data) {
+    if (err != null) {
+      showError('Error while sending verification code. Please try again later.');
+    } else {
+      // code verification success, refresh signup state
+      updateSignupState();
+    }
+  });
+}
+
 // updates the signup state.
 function updateSignupState() {
   console.log('updating signup state..');
@@ -161,22 +187,15 @@ function updateSignupState() {
           'clusters:\n' +
           '- cluster:\n' +
           '    server: '+consoleURL+'\n' +
-          '  name: kcp-stable\n' +
-          '- cluster:\n' +
-          '    server: '+consoleURL+'\n' +
-          '  name: kcp-unstable\n' +
+          '    insecure-skip-tls-verify: true\n' +
+          '  name: home-workspace\n' +
           'contexts:\n' +
           '- context:\n' +
-          '    cluster: kcp-stable\n' +
+          '    cluster: home-workspace\n' +
           '    namespace: default\n' +
           '    user: oidc\n' +
-          '  name: kcp-stable\n' +
-          '- context:\n' +
-          '    cluster: kcp-unstable\n' +
-          '    namespace: default\n' +
-          '    user: oidc\n' +
-          '  name: kcp-unstable\n' +
-          'current-context: kcp-stable\n' +
+          '  name: home-workspace\n' +
+          'current-context: home-workspace\n' +
           'kind: Config\n' +
           'preferences: {}\n' +
           'users:\n' +
@@ -187,12 +206,52 @@ function updateSignupState() {
           '      args:\n' +
           '      - oidc-login\n' +
           '      - get-token\n' +
-          '      - --oidc-issuer-url=https://sso.redhat.com/auth/realms/redhat-external\n' +
-          '      - --oidc-client-id=rhoas-cli-prod\n' +
+          '      - --oidc-issuer-url=https://sso.devsandbox.dev/auth/realms/sandbox-dev\n' +
+          '      - --oidc-client-id=sandbox-public\n' +
           '      command: kubectl\n' +
           '      env: null\n' +
           '      interactiveMode: IfAvailable\n' +
           '      provideClusterInfo: false';
+      if (data.status.appstudioReady === false) {
+        show('state-waiting-for-approval-appstudio')
+        startPolling();
+      } else {
+        if (data.status.appstudioCreated === true) {
+          show('appstudio-workspace-created')
+          show('dashboard-appstudio');
+          document.getElementById('kubeconfig-appstudio').value = 'apiVersion: v1\n' +
+              'clusters:\n' +
+              '- cluster:\n' +
+              '    server: '+consoleURL+':appstudio\n' +
+              '    insecure-skip-tls-verify: true\n' +
+              '  name: home-workspace\n' +
+              'contexts:\n' +
+              '- context:\n' +
+              '    cluster: home-workspace\n' +
+              '    namespace: default\n' +
+              '    user: oidc\n' +
+              '  name: home-workspace\n' +
+              'current-context: home-workspace\n' +
+              'kind: Config\n' +
+              'preferences: {}\n' +
+              'users:\n' +
+              '- name: oidc\n' +
+              '  user:\n' +
+              '    exec:\n' +
+              '      apiVersion: client.authentication.k8s.io/v1beta1\n' +
+              '      args:\n' +
+              '      - oidc-login\n' +
+              '      - get-token\n' +
+              '      - --oidc-issuer-url=https://sso.devsandbox.dev/auth/realms/sandbox-dev\n' +
+              '      - --oidc-client-id=sandbox-public\n' +
+              '      command: kubectl\n' +
+              '      env: null\n' +
+              '      interactiveMode: IfAvailable\n' +
+              '      provideClusterInfo: false';
+        } else {
+          show('create-appstudio-workspace')
+        }
+      }
     } else if (data.status.ready === false && data.status.reason === 'Provisioning') {
       console.log('account is provisioning..');
       // account is provisioning; start polling.
@@ -204,6 +263,7 @@ function updateSignupState() {
       // account is in an unknown state, display pending approval; start polling.
       hideAll();
       show('state-waiting-for-approval')
+      show('state-waiting-for-approval-appstudio')
       startPolling();
     }
   }, function(err, data) {

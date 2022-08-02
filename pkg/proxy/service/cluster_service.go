@@ -42,7 +42,7 @@ func NewMemberClusterService(context servicecontext.ServiceContext, options ...O
 
 func (s *ServiceImpl) GetNamespace(ctx *gin.Context, userID, username string) (*namespace.NamespaceAccess, error) {
 	// Get Signup
-	signup, err := s.ServiceContext.Services().SignupService().GetSignup(userID, username)
+	signup, err := s.ServiceContext.Services().SignupService().GetSignup(ctx, userID, username)
 	if err != nil {
 		return nil, err
 	}

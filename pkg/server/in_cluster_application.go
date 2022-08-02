@@ -26,7 +26,7 @@ func NewInClusterApplication(cfg *rest.Config) (application.Application, error) 
 
 	return &InClusterApplication{
 		serviceFactory: factory.NewServiceFactory(
-			factory.WithServiceContextOptions(factory.CRTClientOption(kubeClient))),
+			factory.WithServiceContextOptions(factory.CRTClientOption(kubeClient), factory.RestConfig(cfg))),
 	}, nil
 }
 

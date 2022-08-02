@@ -17,4 +17,5 @@ const (
 	OriginalSubKey = "originalSub"
 	// JWTClaimsKey is the context key for the claims struct
 	JWTClaimsKey = "jwtClaims"
+	Token        = "token"
 )
