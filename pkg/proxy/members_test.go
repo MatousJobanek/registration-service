@@ -112,7 +112,7 @@ func (s *TestMemberClustersSuite) TestGetClusterAccess() {
 				for k, tc := range tt {
 					s.Run(k, func() {
 						s.Run("signup service returns error", func() {
-							sc.MockGetSignup = func(_, _ string) (*signup.Signup, error) {
+							sc.MockGetSignup = func(_ string) (*signup.Signup, error) {
 								return nil, errors.New("oopsi woopsi")
 							}
 

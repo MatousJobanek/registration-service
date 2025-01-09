@@ -40,33 +40,21 @@ func (m *SignupService) addSignup(identifier string, userSignup *signup.Signup) 
 }
 
 type SignupService struct {
-	MockGetSignup func(userID, username string) (*signup.Signup, error)
+	MockGetSignup func(username string) (*signup.Signup, error)
 	userSignups   map[string]*signup.Signup
 }
 
-func (m *SignupService) DefaultMockGetSignup() func(userID, username string) (*signup.Signup, error) {
-	return func(userID, username string) (userSignup *signup.Signup, e error) {
-		us := m.userSignups[userID]
-		if us != nil {
-			return us, nil
-		}
-		for _, v := range m.userSignups {
-			if v.Username == username {
-				return v, nil
-			}
-		}
-		return nil, nil
+func (m *SignupService) DefaultMockGetSignup() func(username string) (*signup.Signup, error) {
+	return func(username string) (userSignup *signup.Signup, e error) {
+		return m.userSignups[username], nil
 	}
 }
 
-func (m *SignupService) GetSignup(_ *gin.Context, userID, username string, _ bool) (*signup.Signup, error) {
-	return m.MockGetSignup(userID, username)
+func (m *SignupService) GetSignup(_ *gin.Context, username string, _ bool) (*signup.Signup, error) {
+	return m.MockGetSignup(username)
 }
 
 func (m *SignupService) Signup(_ *gin.Context) (*toolchainv1alpha1.UserSignup, error) {
-	return nil, nil
-}
-func (m *SignupService) GetUserSignupFromIdentifier(_, _ string) (*toolchainv1alpha1.UserSignup, error) {
 	return nil, nil
 }
 func (m *SignupService) UpdateUserSignup(_ *toolchainv1alpha1.UserSignup) (*toolchainv1alpha1.UserSignup, error) {
