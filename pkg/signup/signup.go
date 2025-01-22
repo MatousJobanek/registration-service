@@ -2,6 +2,8 @@ package signup
 
 import (
 	"fmt"
+	"hash/crc32"
+	"strings"
 
 	"github.com/codeready-toolchain/registration-service/pkg/log"
 	"github.com/gin-gonic/gin"
@@ -88,4 +90,49 @@ func PollUpdateSignup(ctx *gin.Context, updater func() error) error {
 	}
 
 	return nil
+}
+
+const DNS1123NameMaximumLength = 63
+
+// EncodeUserIdentifier transforms a subject value (the user's username) to make it DNS-1123 compliant,
+// by removing invalid characters, trimming the length and prefixing with a CRC32 checksum if required.
+// ### WARNING ### changing this function will cause breakage, as it is used to lookup existing UserSignup
+// resources.  If a change is absolutely required, then all existing UserSignup instances must be migrated
+// to the new value
+func EncodeUserIdentifier(subject string) string {
+	// Sanitize subject to be compliant with DNS labels format (RFC-1123)
+	encoded := sanitizeDNS1123(subject)
+
+	// Add a checksum prefix if the encoded value is different to the original subject value
+	if encoded != subject {
+		encoded = fmt.Sprintf("%x-%s", crc32.Checksum([]byte(subject), crc32.IEEETable), encoded)
+	}
+
+	// Trim if the length exceeds the maximum
+	if len(encoded) > DNS1123NameMaximumLength {
+		encoded = encoded[0:DNS1123NameMaximumLength]
+	}
+
+	return encoded
+}
+
+func sanitizeDNS1123(str string) string {
+	// convert to lowercase
+	lstr := strings.ToLower(str)
+
+	// remove unwanted characters
+	b := strings.Builder{}
+	for _, r := range lstr {
+		switch {
+		case r >= '0' && r <= '9':
+			fallthrough
+		case r >= 'a' && r <= 'z':
+			fallthrough
+		case r == '-':
+			b.WriteRune(r)
+		}
+	}
+
+	// remove leading and trailing '-'
+	return strings.Trim(b.String(), "-")
 }

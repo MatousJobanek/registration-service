@@ -17,6 +17,7 @@ import (
 	"github.com/codeready-toolchain/registration-service/pkg/context"
 	errors2 "github.com/codeready-toolchain/registration-service/pkg/errors"
 	"github.com/codeready-toolchain/registration-service/pkg/namespaced"
+	"github.com/codeready-toolchain/registration-service/pkg/signup"
 	"github.com/codeready-toolchain/registration-service/pkg/signup/service"
 	"github.com/codeready-toolchain/registration-service/pkg/util"
 	"github.com/codeready-toolchain/registration-service/test"
@@ -239,7 +240,7 @@ func (s *TestSignupServiceSuite) TestGetSignupFailsWithNotFoundThenOtherError() 
 	// given
 	fakeClient, application := testutil.PrepareInClusterApp(s.T())
 	fakeClient.MockGet = func(ctx gocontext.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-		if _, ok := obj.(*toolchainv1alpha1.UserSignup); ok && key.Name != "000" {
+		if _, ok := obj.(*toolchainv1alpha1.UserSignup); ok {
 			return errors2.NewInternalError(errors.New("something quite unfortunate happened"), "something bad")
 		}
 		return fakeClient.Client.Get(ctx, key, obj, opts...)
@@ -248,7 +249,7 @@ func (s *TestSignupServiceSuite) TestGetSignupFailsWithNotFoundThenOtherError() 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	// when
-	_, err := application.SignupService().GetSignup(c, "000", "abc", true)
+	_, err := application.SignupService().GetSignup(c, "abc", true)
 
 	// then
 	require.EqualError(s.T(), err, "something quite unfortunate happened: something bad")
@@ -381,39 +382,6 @@ func (s *TestSignupServiceSuite) TestUserSignupWithInvalidSubjectPrefix() {
 
 	require.Equal(s.T(), expected, val.Name)
 	require.False(s.T(), strings.HasPrefix(val.Name, "-"))
-}
-
-func (s *TestSignupServiceSuite) TestEncodeUserID() {
-	s.Run("test valid user ID unchanged", func() {
-		userID := "abcde-12345"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), userID, encoded)
-	})
-	s.Run("test user ID with invalid characters", func() {
-		userID := "abcde\\*-12345"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), "c0177ca4-abcde-12345", encoded)
-	})
-	s.Run("test user ID with invalid prefix", func() {
-		userID := "-1234567"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), "ca3e1e0f-1234567", encoded)
-	})
-	s.Run("test user ID that exceeds max length", func() {
-		userID := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-01234567890123456789"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), "e3632025-0123456789abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr", encoded)
-	})
-	s.Run("test user ID with colon separator", func() {
-		userID := "abc:xyz"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), "a05a4053-abcxyz", encoded)
-	})
-	s.Run("test user ID with invalid end character", func() {
-		userID := "abc---"
-		encoded := service.EncodeUserIdentifier(userID)
-		require.Equal(s.T(), "ed6bd2b5-abc", encoded)
-	})
 }
 
 func (s *TestSignupServiceSuite) TestUserWithExcludedDomainEmailSignsUp() {
@@ -674,28 +642,25 @@ func (s *TestSignupServiceSuite) TestGetUserSignupFails() {
 
 	fakeClient, application := testutil.PrepareInClusterApp(s.T())
 	fakeClient.MockGet = func(ctx gocontext.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-		if _, ok := obj.(*toolchainv1alpha1.UserSignup); ok && key.Name != username {
+		if _, ok := obj.(*toolchainv1alpha1.UserSignup); ok {
 			return errors.New("an error occurred")
 		}
 		return fakeClient.Client.Get(ctx, key, obj, opts...)
 	}
 
 	// when
-	_, err := application.SignupService().GetSignup(c, "", username, true)
+	_, err := application.SignupService().GetSignup(c, username, true)
 
 	// then
 	require.EqualError(s.T(), err, "an error occurred")
 }
 
 func (s *TestSignupServiceSuite) TestGetSignupNotFound() {
-	userID, err := uuid.NewV4()
-	require.NoError(s.T(), err)
-
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	_, application := testutil.PrepareInClusterApp(s.T())
 
 	// when
-	signup, err := application.SignupService().GetSignup(c, userID.String(), "", true)
+	signup, err := application.SignupService().GetSignup(c, "does-not-exist", true)
 
 	// then
 	require.Nil(s.T(), signup)
@@ -706,20 +671,17 @@ func (s *TestSignupServiceSuite) TestGetSignupStatusNotComplete() {
 	// given
 	s.ServiceConfiguration(true, "", 5)
 
-	userID, err := uuid.NewV4()
-	require.NoError(s.T(), err)
-
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	userSignupNotComplete := &toolchainv1alpha1.UserSignup{
 		TypeMeta: v1.TypeMeta{},
 		ObjectMeta: v1.ObjectMeta{
-			Name:      userID.String(),
+			Name:      signup.EncodeUserIdentifier("not-complete"),
 			Namespace: commontest.HostOperatorNs,
 		},
 		Spec: toolchainv1alpha1.UserSignupSpec{
 			IdentityClaims: toolchainv1alpha1.IdentityClaimsEmbedded{
-				PreferredUsername: "bill",
+				PreferredUsername: "not-complete",
 			},
 		},
 		Status: toolchainv1alpha1.UserSignupStatus{
@@ -744,14 +706,14 @@ func (s *TestSignupServiceSuite) TestGetSignupStatusNotComplete() {
 	_, application := testutil.PrepareInClusterApp(s.T(), userSignupNotComplete)
 
 	// when
-	response, err := application.SignupService().GetSignup(c, userID.String(), "", true)
+	response, err := application.SignupService().GetSignup(c, "not-complete", true)
 
 	// then
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), response)
 
-	require.Equal(s.T(), userID.String(), response.Name)
-	require.Equal(s.T(), "bill", response.Username)
+	require.Equal(s.T(), "not-complete", response.Name)
+	require.Equal(s.T(), "not-complete", response.Username)
 	require.Equal(s.T(), "bill", response.CompliantUsername)
 	require.False(s.T(), response.Status.Ready)
 	require.Equal(s.T(), "test_reason", response.Status.Reason)
@@ -780,14 +742,14 @@ func (s *TestSignupServiceSuite) TestGetSignupStatusNotComplete() {
 
 		// when
 		// we set checkUserSignupCompleted to false
-		response, err := svc.GetSignup(c, userID.String(), userSignupNotComplete.Spec.IdentityClaims.PreferredUsername, false)
+		response, err := svc.GetSignup(c, "not-complete", false)
 
 		// then
 		require.NoError(s.T(), err)
 		require.NotNil(s.T(), response)
 
-		require.Equal(s.T(), userID.String(), response.Name)
-		require.Equal(s.T(), "bill", response.Username)
+		require.Equal(s.T(), "not-complete", response.Name)
+		require.Equal(s.T(), "not-complete", response.Username)
 		require.Equal(s.T(), "bill", response.CompliantUsername)
 		require.True(s.T(), response.Status.Ready)
 		require.Equal(s.T(), "mur_ready_reason", response.Status.Reason)
@@ -833,15 +795,12 @@ func (s *TestSignupServiceSuite) TestGetSignupNoStatusNotCompleteCondition() {
 	}
 
 	for _, status := range []toolchainv1alpha1.UserSignupStatus{noCondition, pendingApproval, noClusterApproval} {
-		userID, err := uuid.NewV4()
-		require.NoError(s.T(), err)
-
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 		userSignup := &toolchainv1alpha1.UserSignup{
 			TypeMeta: v1.TypeMeta{},
 			ObjectMeta: v1.ObjectMeta{
-				Name:      userID.String(),
+				Name:      signup.EncodeUserIdentifier("bill"),
 				Namespace: commontest.HostOperatorNs,
 			},
 			Spec: toolchainv1alpha1.UserSignupSpec{
@@ -857,13 +816,13 @@ func (s *TestSignupServiceSuite) TestGetSignupNoStatusNotCompleteCondition() {
 		_, application := testutil.PrepareInClusterApp(s.T(), userSignup)
 
 		// when
-		response, err := application.SignupService().GetSignup(c, userID.String(), "bill", true)
+		response, err := application.SignupService().GetSignup(c, "bill", true)
 
 		// then
 		require.NoError(s.T(), err)
 		require.NotNil(s.T(), response)
 
-		require.Equal(s.T(), userID.String(), response.Name)
+		require.Equal(s.T(), "bill", response.Name)
 		require.Equal(s.T(), "bill", response.Username)
 		require.Empty(s.T(), response.CompliantUsername)
 		require.False(s.T(), response.Status.Ready)
@@ -892,7 +851,7 @@ func (s *TestSignupServiceSuite) TestGetSignupDeactivated() {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	// when
-	signup, err := application.SignupService().GetSignup(c, us.Name, "", true)
+	signup, err := application.SignupService().GetSignup(c, us.Spec.IdentityClaims.PreferredUsername, true)
 
 	// then
 	require.Nil(s.T(), signup)
@@ -917,7 +876,7 @@ func (s *TestSignupServiceSuite) TestGetSignupStatusOK() {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 			// when
-			response, err := application.SignupService().GetSignup(c, us.Name, "", true)
+			response, err := application.SignupService().GetSignup(c, us.Spec.IdentityClaims.PreferredUsername, true)
 
 			// then
 			require.NoError(s.T(), err)
@@ -949,7 +908,7 @@ func (s *TestSignupServiceSuite) TestGetSignupByUsernameOK() {
 	s.ServiceConfiguration(true, "", 5)
 
 	us := s.newUserSignupComplete()
-	us.Name = service.EncodeUserIdentifier(us.Spec.IdentityClaims.PreferredUsername)
+	us.Name = signup.EncodeUserIdentifier(us.Spec.IdentityClaims.PreferredUsername)
 	// Set the scheduled deactivation timestamp 1 day in the future
 	deactivationTimestamp := time.Now().Add(time.Hour * 24).Round(time.Second).UTC()
 	us.Status.ScheduledDeactivationTimestamp = util.Ptr(v1.NewTime(deactivationTimestamp))
@@ -969,7 +928,7 @@ func (s *TestSignupServiceSuite) TestGetSignupByUsernameOK() {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	// when
-	response, err := svc.GetSignup(c, "foo", us.Spec.IdentityClaims.PreferredUsername, true)
+	response, err := svc.GetSignup(c, us.Spec.IdentityClaims.PreferredUsername, true)
 
 	// then
 	require.NoError(s.T(), err)
@@ -1050,7 +1009,7 @@ func (s *TestSignupServiceSuite) TestGetSignupStatusFailGetToolchainStatus() {
 	_, application := testutil.PrepareInClusterApp(s.T(), us, mur, space)
 
 	// when
-	_, err := application.SignupService().GetSignup(c, us.Name, "", true)
+	_, err := application.SignupService().GetSignup(c, us.Spec.IdentityClaims.PreferredUsername, true)
 
 	// then
 	require.EqualError(s.T(), err, fmt.Sprintf("error when retrieving ToolchainStatus to set Che Dashboard for completed UserSignup %s: toolchainstatuses.toolchain.dev.openshift.com \"toolchain-status\" not found", us.Name))
@@ -1074,7 +1033,7 @@ func (s *TestSignupServiceSuite) TestGetSignupMURGetFails() {
 	}
 
 	// when
-	_, err := application.SignupService().GetSignup(c, us.Name, "", true)
+	_, err := application.SignupService().GetSignup(c, us.Spec.IdentityClaims.PreferredUsername, true)
 
 	// then
 	require.EqualError(s.T(), err, fmt.Sprintf("error when retrieving MasterUserRecord for completed UserSignup %s: an error occurred", us.Name))
@@ -1156,7 +1115,7 @@ func (s *TestSignupServiceSuite) TestGetSignupReadyConditionStatus() {
 			_, application := testutil.PrepareInClusterApp(s.T(), us, mur, space, toolchainStatus)
 
 			// when
-			response, err := application.SignupService().GetSignup(c, us.Name, "", true)
+			response, err := application.SignupService().GetSignup(c, us.Name, true)
 
 			// then
 			require.NoError(s.T(), err)
@@ -1188,7 +1147,7 @@ func (s *TestSignupServiceSuite) TestGetSignupBannedUserEmail() {
 	ctx.Set(context.EmailKey, "jsmith@gmail.com")
 
 	// when
-	response, err := application.SignupService().GetSignup(ctx, us.Name, "", true)
+	response, err := application.SignupService().GetSignup(ctx, us.Spec.IdentityClaims.PreferredUsername, true)
 
 	// then
 	// return not found signup
@@ -1292,41 +1251,6 @@ func (s *TestSignupServiceSuite) TestGetDefaultUserNamespaceFailNoSpace() {
 	// then
 	assert.Empty(s.T(), defaultUserNamespace)
 	assert.Empty(s.T(), targetCluster)
-}
-
-func (s *TestSignupServiceSuite) TestGetUserSignup() {
-	s.ServiceConfiguration(true, "", 5)
-
-	s.Run("getusersignup ok", func() {
-		us := s.newUserSignupComplete()
-		_, application := testutil.PrepareInClusterApp(s.T(), us)
-
-		val, err := application.SignupService().GetUserSignupFromIdentifier(us.Name, "")
-		require.NoError(s.T(), err)
-		require.Equal(s.T(), us.Name, val.Name)
-	})
-
-	s.Run("getusersignup returns error", func() {
-		fakeClient, application := testutil.PrepareInClusterApp(s.T())
-		fakeClient.MockGet = func(ctx gocontext.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-			if _, ok := obj.(*toolchainv1alpha1.UserSignup); ok {
-				return errors.New("get failed")
-			}
-			return fakeClient.Client.Get(ctx, key, obj, opts...)
-		}
-
-		val, err := application.SignupService().GetUserSignupFromIdentifier("foo", "")
-		require.EqualError(s.T(), err, "get failed")
-		require.Nil(s.T(), val)
-	})
-
-	s.Run("getusersignup with unknown user", func() {
-		_, application := testutil.PrepareInClusterApp(s.T())
-
-		val, err := application.SignupService().GetUserSignupFromIdentifier("unknown", "")
-		require.True(s.T(), apierrors.IsNotFound(err))
-		require.Nil(s.T(), val)
-	})
 }
 
 func (s *TestSignupServiceSuite) TestIsPhoneVerificationRequired() {
@@ -1478,7 +1402,7 @@ func (s *TestSignupServiceSuite) TestGetSignupUpdatesUserSignupIdentityClaims() 
 		c.Set(context.UsernameKey, "cocochanel")
 		fakeClient, application := testutil.PrepareInClusterApp(s.T(), userSignup, mur)
 
-		_, err := application.SignupService().GetSignup(c, userSignup.Name, userSignup.Spec.IdentityClaims.PreferredUsername, true)
+		_, err := application.SignupService().GetSignup(c, userSignup.Spec.IdentityClaims.PreferredUsername, true)
 		require.NoError(s.T(), err)
 
 		modified := &toolchainv1alpha1.UserSignup{}
@@ -1501,7 +1425,7 @@ func (s *TestSignupServiceSuite) TestGetSignupUpdatesUserSignupIdentityClaims() 
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Set(context.GivenNameKey, "Jonathan")
 
-			_, err := application.SignupService().GetSignup(c, userSignup.Name, userSignup.Spec.IdentityClaims.PreferredUsername, true)
+			_, err := application.SignupService().GetSignup(c, userSignup.Spec.IdentityClaims.PreferredUsername, true)
 			require.NoError(s.T(), err)
 
 			modified := &toolchainv1alpha1.UserSignup{}
@@ -1527,7 +1451,7 @@ func (s *TestSignupServiceSuite) TestGetSignupUpdatesUserSignupIdentityClaims() 
 				c.Set(context.FamilyNameKey, "Smythe")
 				c.Set(context.CompanyKey, "Red Hat")
 
-				_, err := application.SignupService().GetSignup(c, userSignup.Name, userSignup.Spec.IdentityClaims.PreferredUsername, true)
+				_, err := application.SignupService().GetSignup(c, userSignup.Spec.IdentityClaims.PreferredUsername, true)
 				require.NoError(s.T(), err)
 
 				modified := &toolchainv1alpha1.UserSignup{}
@@ -1555,7 +1479,7 @@ func (s *TestSignupServiceSuite) TestGetSignupUpdatesUserSignupIdentityClaims() 
 					c.Set(context.OriginalSubKey, "jsmythe-original-sub")
 					c.Set(context.EmailKey, "jsmythe@redhat.com")
 
-					_, err := application.SignupService().GetSignup(c, userSignup.Name, userSignup.Spec.IdentityClaims.PreferredUsername, true)
+					_, err := application.SignupService().GetSignup(c, userSignup.Spec.IdentityClaims.PreferredUsername, true)
 					require.NoError(s.T(), err)
 
 					modified := &toolchainv1alpha1.UserSignup{}

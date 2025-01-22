@@ -245,7 +245,7 @@ func (s *TestVerificationServiceSuite) TestInitVerificationClientFailure() {
 	gock.Observe(obs)
 
 	userSignup := testusersignup.NewUserSignup(
-		testusersignup.WithName("johny"),
+		testusersignup.WithName("johnny"),
 		testusersignup.WithLabel(toolchainv1alpha1.UserSignupUserPhoneHashLabelKey, "+1NUMBER"),
 		testusersignup.VerificationRequiredAgo(time.Second))
 
@@ -262,7 +262,7 @@ func (s *TestVerificationServiceSuite) TestInitVerificationClientFailure() {
 
 		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 		err := application.VerificationService().InitVerification(ctx, userSignup.Name, userSignup.Spec.IdentityClaims.PreferredUsername, "+1NUMBER", "1")
-		require.EqualError(s.T(), err, "get failed: error retrieving usersignup: johny", err.Error())
+		require.EqualError(s.T(), err, "get failed: error retrieving usersignup with username 'johnny'", err.Error())
 	})
 
 	s.Run("when client UPDATE call fails indefinitely should return error", func() {

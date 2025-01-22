@@ -109,15 +109,14 @@ func (s *Signup) InitVerificationHandler(ctx *gin.Context) {
 func (s *Signup) GetHandler(ctx *gin.Context) {
 
 	// Get the UserSignup resource from the service by the userID
-	userID := ctx.GetString(context.SubKey)
 	username := ctx.GetString(context.UsernameKey)
-	signupResource, err := s.app.SignupService().GetSignup(ctx, userID, username, true)
+	signupResource, err := s.app.SignupService().GetSignup(ctx, username, true)
 	if err != nil {
 		log.Error(ctx, err, "error getting UserSignup resource")
 		crterrors.AbortWithError(ctx, http.StatusInternalServerError, err, "error getting UserSignup resource")
 	}
 	if signupResource == nil {
-		log.Infof(ctx, "UserSignup resource for userID: %s, username: %s resource not found", userID, username)
+		log.Infof(ctx, "UserSignup resource for username '%s' resource not found", username)
 		ctx.AbortWithStatus(http.StatusNotFound)
 	} else {
 		ctx.JSON(http.StatusOK, signupResource)
